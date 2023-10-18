@@ -173,7 +173,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
             } else {
                 let last_variant = data
                     .variants
-                    .first()
+                    .last()
                     .expect("this trait cannot be derived on an empty enum");
 
                 match &last_variant.fields {

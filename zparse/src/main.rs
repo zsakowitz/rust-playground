@@ -4,7 +4,7 @@ use parser::{character::Character, Parse};
 use zparse_derive::Parse;
 
 fn main() -> Result<(), ()> {
-    let x = Plus::parse("+".chars());
+    let x = MathToken::parse("no".chars());
 
     println!("{x:?}");
 
