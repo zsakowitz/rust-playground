@@ -1,0 +1,7 @@
+[package]
+name = "zparse"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zparse_derive = { path = "../zparse_derive" }

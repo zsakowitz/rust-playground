@@ -1,0 +1,105 @@
+use std::fmt::Debug;
+
+#[derive(Debug)]
+pub enum Token {
+    Number(i32),
+    Name(String),
+    PlusSign,
+    MinusSign,
+    TimesSign,
+    DivideSign,
+    LeftParen,
+    RightParen,
+}
+
+pub fn tokenize(mut str: String) -> Result<Vec<Token>, &'static str> {
+    let mut tokens = vec![];
+
+    loop {
+        str = str.trim().to_string();
+
+        if str.len() == 0 {
+            return Ok(tokens);
+        }
+
+        tokens.push(match str.chars().next().unwrap() as char {
+            '+' => Token::PlusSign,
+            '-' => Token::MinusSign,
+            '*' => Token::TimesSign,
+            '/' => Token::DivideSign,
+            '(' => Token::LeftParen,
+            ')' => Token::RightParen,
+            byte if byte.is_digit(10) => {
+                let mut num = String::new();
+
+                while str.chars().next().unwrap_or('\0').is_digit(10) {
+                    num.push(str.chars().next().unwrap());
+                    str = str[1..].to_owned();
+                }
+
+                tokens.push(Token::Number(num.parse().unwrap()));
+
+                continue;
+            }
+            byte if byte.is_alphabetic() => {
+                let mut name = String::new();
+
+                while str.chars().next().unwrap_or('\0').is_alphabetic() {
+                    name.push(str.chars().next().unwrap());
+                    str = str[1..].to_owned();
+                }
+
+                tokens.push(Token::Name(name));
+
+                continue;
+            }
+            _ => {
+                return Err("Unrecognized character in input.");
+            }
+        });
+
+        str = str[1..].to_owned()
+    }
+}
+
+#[derive(Debug)]
+pub enum Node<'a> {
+    Number(i32),
+    Add(&'a Node<'a>, &'a Node<'a>),
+    Sub(&'a Node<'a>, &'a Node<'a>),
+    Mult(&'a Node<'a>, &'a Node<'a>),
+    Div(&'a Node<'a>, &'a Node<'a>),
+}
+
+struct TreeResult<'a> {
+    node: Node<'a>,
+    tokens: Vec<Token>,
+}
+
+type InterResult<'a> = Result<TreeResult<'a>, &'static str>;
+
+fn tree(mut tokens: Vec<Token>) -> InterResult<'static> {
+    loop {}
+}
+
+fn tree_until_plus_minus(mut tokens: Vec<Token>) -> InterResult<'static> {
+    loop {}
+}
+
+fn tree_until_times_div<'a>(mut tokens: Vec<Token>) -> InterResult<'static> {
+    loop {}
+}
+
+pub fn make_tree<'a>(mut tokens: Vec<Token>) -> Result<Node<'a>, &'static str> {
+    return Ok(tree(tokens)?.node);
+}
+
+fn main() {
+    let eq = "2 + 3 / 4 * 97".to_owned();
+
+    let tokens = tokenize(eq).unwrap();
+    println!("{:?}", &tokens);
+
+    let tree = make_tree(tokens).unwrap();
+    println!("{:?}", &tree);
+}

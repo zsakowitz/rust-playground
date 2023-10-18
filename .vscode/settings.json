@@ -1,0 +1,6 @@
+{
+  "rust-analyzer.linkedProjects": [
+    "./zparse_derive/Cargo.toml",
+    "./zparse/Cargo.toml"
+  ]
+}
