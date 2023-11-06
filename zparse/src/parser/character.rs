@@ -1,30 +1,52 @@
-use super::Parse;
+use super::TryParse;
 use std::str::Chars;
 
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
 pub struct Character<const T: char>;
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub enum CharacterParseError {
-    EndOfInput { expected: char },
-    WrongCharacter { expected: char, actual: char },
+impl<const T: char> TryParse<Chars<'_>> for Character<T> {
+    fn try_parse(mut chars: Chars) -> Option<(Chars, Self)> {
+        match chars.next() {
+            None => None,
+            Some(char) => {
+                if char == T {
+                    Some((chars, Self))
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 
-impl<const T: char> Parse<Chars<'_>> for Character<T> {
-    type Error = CharacterParseError;
+impl<const T: char> TryParse<&str> for Character<T> {
+    fn try_parse(input: &str) -> Option<(&str, Self)> {
+        let mut chars = input.chars();
 
-    fn parse(mut chars: Chars) -> Result<(Chars, Self), Self::Error> {
         match chars.next() {
-            None => Err(CharacterParseError::EndOfInput { expected: T }),
-
-            Some(character) => {
-                if character == T {
-                    Ok((chars, Character))
+            None => None,
+            Some(char) => {
+                if char == T {
+                    Some((&input[char.len_utf8()..], Character))
                 } else {
-                    Err(CharacterParseError::WrongCharacter {
-                        expected: T,
-                        actual: character,
-                    })
+                    None
+                }
+            }
+        }
+    }
+}
+
+impl<const T: char> TryParse<String> for Character<T> {
+    fn try_parse(input: String) -> Option<(String, Self)> {
+        let mut chars = input.chars();
+
+        match chars.next() {
+            None => None,
+            Some(char) => {
+                if char == T {
+                    Some((chars.collect(), Character))
+                } else {
+                    None
                 }
             }
         }

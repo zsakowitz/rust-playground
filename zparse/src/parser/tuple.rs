@@ -1,26 +1,48 @@
-use super::Parse;
+use super::{Parse, TryParse};
+
+impl<T> Parse<T> for () {
+    fn parse(input: T) -> (T, Self) {
+        (input, ())
+    }
+}
+
+impl<T> TryParse<T> for () {
+    fn try_parse(input: T) -> Option<(T, Self)> {
+        (input, ()).into()
+    }
+}
 
 impl<A: Parse<T>, T> Parse<T> for (A,) {
-    type Error = A::Error;
+    fn parse(input: T) -> (T, Self) {
+        let (input, a) = A::parse(input);
+        (input, (a,))
+    }
+}
 
-    fn parse(input: T) -> Result<(T, Self), Self::Error> {
-        let (input, a) = A::parse(input)?;
-        Ok((input, (a,)))
+impl<A: TryParse<T>, T> TryParse<T> for (A,) {
+    fn try_parse(input: T) -> Option<(T, Self)> {
+        let (input, a) = A::try_parse(input)?;
+        Some((input, (a,)))
     }
 }
 
 macro_rules! seq {
     ($first_upper:ident $first_lower:ident $($upper:ident $lower: ident)+) => {
         impl<$first_upper: Parse<T>, $($upper: Parse<T>,)+ T: Clone> Parse<T> for (A, $($upper),+)
-        where
-            $(<$first_upper as Parse<T>>::Error: From<<$upper as Parse<T>>::Error>),+
         {
-            type Error = $first_upper::Error;
+            fn parse(input: T) -> (T, Self) {
+                let (input, $first_lower) = $first_upper::parse(input);
+                $(let (input, $lower) = $upper::parse(input);)+
+                (input, ($first_lower, $($lower),+))
+            }
+        }
 
-            fn parse(input: T) -> Result<(T, Self), Self::Error> {
-                let (input, $first_lower) = $first_upper::parse(input)?;
-                $(let (input, $lower) = $upper::parse(input)?;)+
-                Ok((input, ($first_lower, $($lower),+)))
+        impl<$first_upper: TryParse<T>, $($upper: TryParse<T>,)+ T: Clone> TryParse<T> for (A, $($upper),+)
+        {
+            fn try_parse(input: T) -> Option<(T, Self)> {
+                let (input, $first_lower) = $first_upper::try_parse(input)?;
+                $(let (input, $lower) = $upper::try_parse(input)?;)+
+                Some((input, ($first_lower, $($lower),+)))
             }
         }
     };

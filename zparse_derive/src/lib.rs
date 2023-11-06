@@ -1,15 +1,14 @@
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, Punct, Span};
+use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::{
     parse,
     punctuated::Punctuated,
     token::{Gt, Lt},
-    Data, DeriveInput, Fields, FieldsNamed, FieldsUnnamed, GenericParam, TypeParam, Variant,
-    WhereClause,
+    Data, DeriveInput, Fields, GenericParam, TypeParam, WhereClause,
 };
 
-#[proc_macro_derive(Parse, attributes(hi))]
+#[proc_macro_derive(TryParse)]
 pub fn derive_parse(input: TokenStream) -> TokenStream {
     // Get base information of struct
     let ast: DeriveInput = parse(input).unwrap();
@@ -23,7 +22,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
     generics.gt_token.get_or_insert(Gt::default());
 
     // Add a generic for the input type
-    let input_type = Ident::new("__InputType", Span::call_site());
+    let input_type = Ident::new("Input", Span::call_site());
     generics.params.push(GenericParam::Type(TypeParam {
         attrs: vec![],
         ident: input_type.clone(),
@@ -33,7 +32,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
         default: None,
     }));
 
-    // Add `where` predicates to make sure each type can be parsed from `__InputType`
+    // Add `where` predicates to make sure each type can be parsed from `Input`
     let where_clause = generics.make_where_clause();
     let types_that_must_implement_parse: Vec<_> = match &ast.data {
         Data::Struct(data) => match &data.fields {
@@ -55,7 +54,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
     for ty in types_that_must_implement_parse {
         where_clause
             .predicates
-            .push(parse(quote! { #ty: Parse<#input_type> }.into()).unwrap());
+            .push(parse(quote! { #ty: TryParse<#input_type> }.into()).unwrap());
     }
 
     // Separate the `impl` generics and `where` clause
@@ -65,11 +64,9 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
         Data::Struct(data) => match data.fields {
             Fields::Unit => {
                 let gen = quote! {
-                    impl #impl_generics Parse<#input_type> for #name #type_generics #where_clause {
-                        type Error = ::std::convert::Infallible;
-
-                        fn parse(input: #input_type) -> Result<(#input_type, Self), Self::Error> {
-                            Ok((input, Self))
+                    impl #impl_generics TryParse<#input_type> for #name #type_generics #where_clause {
+                        fn try_parse(input: #input_type) -> Option<(#input_type, Self)> {
+                            Some((input, Self))
                         }
                     }
                 };
@@ -78,13 +75,11 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
             }
 
             Fields::Unnamed(fields) => {
-                let Some(first_ty) = fields.unnamed.first().map(|field| &field.ty) else {
+                if fields.unnamed.is_empty() {
                     let gen = quote! {
-                        impl #impl_generics Parse<#input_type> for #name #type_generics #where_clause {
-                            type Error = ::std::convert::Infallible;
-
-                            fn parse(input: #input_type) -> Result<(#input_type, Self), Self::Error> {
-                                Ok((input, Self()))
+                        impl #impl_generics TryParse<#input_type> for #name #type_generics #where_clause {
+                            fn try_parse(input: #input_type) -> Option<(#input_type, Self)> {
+                                Some((input, Self()))
                             }
                         }
                     };
@@ -102,12 +97,10 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                 let fields = bindings.clone();
 
                 let gen = quote! {
-                    impl #impl_generics Parse<#input_type> for #name #type_generics #where_clause {
-                        type Error = <#first_ty as Parse<#input_type>>::Error;
-
-                        fn parse(input: #input_type) -> Result<(#input_type, Self), Self::Error> {
-                            #(let (input, #bindings) = Parse::parse(input)?;)*
-                            Ok((input, Self(#(#fields,)*)))
+                    impl #impl_generics TryParse<#input_type> for #name #type_generics #where_clause {
+                        fn try_parse(input: #input_type) -> Option<(#input_type, Self)> {
+                            #(let (input, #bindings) = TryParse::try_parse(input)?;)*
+                            Some((input, Self(#(#fields,)*)))
                         }
                     }
                 };
@@ -116,13 +109,11 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
             }
 
             Fields::Named(fields) => {
-                let Some(first_ty) = fields.named.first().map(|field| &field.ty) else {
+                if fields.named.is_empty() {
                     let gen = quote! {
-                        impl #impl_generics Parse<#input_type> for #name #type_generics #where_clause {
-                            type Error = ::std::convert::Infallible;
-
-                            fn parse(input: #input_type) -> Result<(#input_type, Self), Self::Error> {
-                                Ok((input, Self()))
+                        impl #impl_generics TryParse<#input_type> for #name #type_generics #where_clause {
+                            fn try_parse(input: #input_type) -> Option<(#input_type, Self)> {
+                                Some((input, Self {}))
                             }
                         }
                     };
@@ -146,12 +137,10 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                 });
 
                 let gen = quote! {
-                    impl #impl_generics Parse<#input_type> for #name #type_generics #where_clause {
-                        type Error = <#first_ty as Parse<#input_type>>::Error;
-
-                        fn parse(input: #input_type) -> Result<(#input_type, Self), Self::Error> {
-                            #(let (input, #bindings) = Parse::parse(input)?;)*
-                            Ok((input, Self { #(#fields,)* }))
+                    impl #impl_generics TryParse<#input_type> for #name #type_generics #where_clause {
+                        fn try_parse(input: #input_type) -> Option<(#input_type, Self)> {
+                            #(let (input, #bindings) = TryParse::try_parse(input)?;)*
+                            Some((input, Self { #(#fields,)* }))
                         }
                     }
                 };
@@ -161,32 +150,6 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
         },
 
         Data::Enum(data) => {
-            let is_infallible = data.variants.iter().any(|variant| match &variant.fields {
-                Fields::Unit => true,
-                Fields::Unnamed(fields) => fields.unnamed.is_empty(),
-                Fields::Named(fields) => fields.named.is_empty(),
-            });
-
-            // If this is `None`, it means the parser is infallible.
-            let error_type = if is_infallible {
-                None
-            } else {
-                let last_variant = data
-                    .variants
-                    .last()
-                    .expect("this trait cannot be derived on an empty enum");
-
-                match &last_variant.fields {
-                    Fields::Unit => None,
-                    Fields::Unnamed(FieldsUnnamed {
-                        unnamed: fields, ..
-                    })
-                    | Fields::Named(FieldsNamed { named: fields, .. }) => {
-                        fields.first().map(|field| field.ty.clone())
-                    }
-                }
-            };
-
             let last_index = data.variants.len() - 1;
 
             let do_we_need_to_clone_input_type =
@@ -204,7 +167,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                 let name = &variant.ident;
 
                 match &variant.fields {
-                    Fields::Unit => quote! { return Ok((input, Self::#name)); },
+                    Fields::Unit => quote! { return Some((input, Self::#name)); },
 
                     Fields::Unnamed(fields) => {
                         let bindings = fields.unnamed.iter().enumerate().map(|(index, _)| {
@@ -219,8 +182,8 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                         if is_last {
                             let gen = quote! {
                                 {
-                                    #(let (input, #bindings) = Parse::parse(input)?;)*
-                                    Ok((input, Self::#name(#(#fields,)*)))
+                                    #(let (input, #bindings) = TryParse::try_parse(input)?;)*
+                                    Some((input, Self::#name(#(#fields,)*)))
                                 }
                             };
 
@@ -230,10 +193,10 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                         let gen = quote! {
                             'attempt: {
                                 let input = input.clone();
-                                #(let Ok((input, #bindings)) = Parse::parse(input) else {
+                                #(let Some((input, #bindings)) = TryParse::try_parse(input) else {
                                     break 'attempt;
                                 };)*
-                                return Ok((input, Self::#name(#(#fields,)*)));
+                                return Some((input, Self::#name(#(#fields,)*)));
                             }
                         };
 
@@ -259,8 +222,8 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                         if is_last {
                             let gen = quote! {
                                 {
-                                    #(let (input, #bindings) = Parse::parse(input)?;)*
-                                    Ok((input, Self::#name { #(#fields,)* }))
+                                    #(let (input, #bindings) = TryParse::try_parse(input)?;)*
+                                    Some((input, Self::#name { #(#fields,)* }))
                                 }
                             };
 
@@ -270,10 +233,10 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                         let gen = quote! {
                             'attempt: {
                                 let input = input.clone();
-                                #(let Ok((input, #bindings)) = Parse::parse(input) else {
+                                #(let Some((input, #bindings)) = TryParse::try_parse(input) else {
                                     break 'attempt;
                                 };)*
-                                return Ok((input, Self::#name { #(#fields,)* }));
+                                return Some((input, Self::#name { #(#fields,)* }));
                             }
                         };
 
@@ -281,11 +244,6 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                     }
                 }
             });
-
-            let error_type = match error_type {
-                None => quote! { ::std::convert::Infallible },
-                Some(error_type) => quote! { <#error_type as Parse<#input_type>>::Error },
-            };
 
             let where_clause = if do_we_need_to_clone_input_type {
                 let mut clause = where_clause
@@ -305,10 +263,8 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
             };
 
             let gen = quote! {
-                impl #impl_generics Parse<#input_type> for #name #type_generics #where_clause {
-                    type Error = #error_type;
-
-                    fn parse(input: #input_type) -> Result<(#input_type, Self), Self::Error> {
+                impl #impl_generics TryParse<#input_type> for #name #type_generics #where_clause {
+                    fn try_parse(input: #input_type) -> Option<(#input_type, Self)> {
                         #(#attempts)*
                     }
                 }
