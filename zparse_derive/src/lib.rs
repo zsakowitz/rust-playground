@@ -9,7 +9,7 @@ use syn::{
 };
 
 #[proc_macro_derive(TryParse)]
-pub fn derive_parse(input: TokenStream) -> TokenStream {
+pub fn derive_try_parse(input: TokenStream) -> TokenStream {
     // Get base information of struct
     let ast: DeriveInput = parse(input).unwrap();
     let name = ast.ident;

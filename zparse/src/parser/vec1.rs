@@ -1,6 +1,5 @@
-use vec1::Vec1;
-
 use super::{Parse, TryParse};
+use vec1::Vec1;
 
 /// This is an infinite loop. It's implemented for consistency with `Vec<T>`, and it's implemented
 /// thoroughly to prevent dropping the return value.
